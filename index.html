@@ -1613,7 +1613,11 @@ totalEffort is the sum of committed efforts and must not exceed ${capacity}. tas
         return tasks.filter(t => t.status === status && isOverdue(t.dueDate));
       }
 
-      const activeCount = tasks.filter(t => t.status !== 'done').length;
+      const activeTasks = tasks.filter(t => t.status !== 'done');
+      const activeCount = activeTasks.length;
+      const unscoredCount = activeTasks.filter(t => !isScored(t)).length;
+      const quickWinCount = activeTasks.filter(t => quadrantOf(t) === 'quickwin').length;
+      const wipCount = tasks.filter(t => t.status === 'inprogress').length;
       const visibleStatuses = overdueFilter ? ['todo', 'inprogress'] : STATUSES;
 
       return (
@@ -1708,6 +1712,55 @@ totalEffort is the sum of committed efforts and must not exceed ${capacity}. tas
                 )}
               </div>
             </div>
+
+            {/* Backlog health */}
+            {!loading && tasks.length > 0 && (
+              <div className="mb-5 flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-[10px] text-stone-400 uppercase tracking-widest mr-1">Backlog health</span>
+                <span className="font-mono text-[11px] px-2.5 py-1 rounded-full border bg-white border-stone-200 text-stone-500 shadow-sm">
+                  {activeCount} active
+                </span>
+                <button
+                  onClick={() => { if (overdueCount > 0) { setView('board'); setOverdueFilter(true); } }}
+                  disabled={overdueCount === 0}
+                  title={overdueCount > 0 ? 'Show overdue tasks on the board' : 'Nothing overdue'}
+                  className={`font-mono text-[11px] px-2.5 py-1 rounded-full border shadow-sm transition-colors ${
+                    overdueCount > 0
+                      ? 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100 cursor-pointer'
+                      : 'bg-white border-stone-200 text-stone-400 cursor-default'
+                  }`}>
+                  {overdueCount} overdue
+                </button>
+                <button
+                  onClick={() => { if (unscoredCount > 0) setView('matrix'); }}
+                  disabled={unscoredCount === 0}
+                  title={unscoredCount > 0 ? 'Score these on the Priority Matrix' : 'Everything is scored'}
+                  className={`font-mono text-[11px] px-2.5 py-1 rounded-full border shadow-sm transition-colors ${
+                    unscoredCount > 0
+                      ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 cursor-pointer'
+                      : 'bg-white border-stone-200 text-stone-400 cursor-default'
+                  }`}>
+                  {unscoredCount} unscored
+                </button>
+                <button
+                  onClick={() => { if (quickWinCount > 0) setView('matrix'); }}
+                  disabled={quickWinCount === 0}
+                  title="High impact, low effort — see them on the matrix"
+                  className={`font-mono text-[11px] px-2.5 py-1 rounded-full border shadow-sm transition-colors ${
+                    quickWinCount > 0
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 cursor-pointer'
+                      : 'bg-white border-stone-200 text-stone-400 cursor-default'
+                  }`}>
+                  {quickWinCount} quick win{quickWinCount === 1 ? '' : 's'}
+                </button>
+                {wipCount > 3 && (
+                  <span className="font-mono text-[11px] px-2.5 py-1 rounded-full border bg-red-50 border-red-200 text-red-700 shadow-sm"
+                    title="More than 3 tasks in progress — consider finishing before starting">
+                    WIP high · {wipCount} in progress
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* View switch */}
             <div className="mb-6">

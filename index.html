@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Darsh-Task Board</title>
+  <title>Task Board — AI Product Planning</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
@@ -757,7 +757,7 @@ totalEffort is the sum of committed efforts and must not exceed ${capacity}. tas
       function handleSave() {
         if (!validateMandatoryFields()) return;
         setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 1800);
+        setTimeout(onClose, 450); // fields auto-save on change; this validates and closes
       }
 
       React.useEffect(() => {
@@ -1046,7 +1046,7 @@ totalEffort is the sum of committed efforts and must not exceed ${capacity}. tas
 
             <div className="px-6 py-4 border-t border-stone-100 flex items-center justify-between">
               <p className="font-mono text-[10px] text-stone-400">
-                <span className="text-red-400">*</span> required fields
+                <span className="text-red-400">*</span> required · changes save automatically
               </p>
               <button onClick={handleSave}
                 className={`font-mono text-xs px-4 py-2 rounded-xl transition-all ${
@@ -1054,7 +1054,7 @@ totalEffort is the sum of committed efforts and must not exceed ${capacity}. tas
                     ? 'bg-emerald-600 text-white border border-emerald-600'
                     : 'text-stone-700 border border-stone-300 bg-white hover:bg-stone-900 hover:text-white hover:border-stone-900'
                 }`}>
-                {saveSuccess ? '✓ Saved' : 'Save'}
+                {saveSuccess ? '✓ Saved' : 'Save & close'}
               </button>
             </div>
           </div>
@@ -1397,7 +1397,10 @@ totalEffort is the sum of committed efforts and must not exceed ${capacity}. tas
       const [sprintCapacity, setSprintCapacity] = React.useState(10);
       const [detailTask, setDetailTask] = React.useState(null);
       const [overdueFilter, setOverdueFilter] = React.useState(false);
-      const [view, setView] = React.useState('board');
+      const [view, setView] = React.useState(() => {
+        const v = new URLSearchParams(window.location.search).get('view');
+        return ['board', 'matrix'].includes(v) ? v : 'board';
+      });
       const [draggingId, setDraggingId] = React.useState(null);
       const draggingIdRef = React.useRef(null);
       const errorTimerRef = React.useRef(null);
@@ -1908,17 +1911,20 @@ totalEffort is the sum of committed efforts and must not exceed ${capacity}. tas
     /* ── App (auth gate) ──────────────────────────────── */
     function App() {
       const [user, setUser] = React.useState(null);
-      const [isDemo, setIsDemo] = React.useState(false);
+      // ?demo=1 deep-links straight into demo mode — used by the portfolio so
+      // a visitor lands inside the product instead of on the auth screen.
+      const [isDemo, setIsDemo] = React.useState(() => new URLSearchParams(window.location.search).get('demo') === '1');
 
       React.useEffect(() => {
         sb.auth.getSession().then(({ data: { session } }) => {
           setUser(session?.user ?? false);
         });
 
-        const { data: { subscription } } = sb.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = sb.auth.onAuthStateChange((event, session) => {
           setUser(session?.user ?? false);
-          // If user signs out, exit demo mode too
-          if (!session) setIsDemo(false);
+          // Exit demo only on an actual sign-out — the initial auth event also
+          // has a null session and must not cancel a ?demo=1 deep link.
+          if (event === 'SIGNED_OUT') setIsDemo(false);
         });
 
         return () => subscription.unsubscribe();
@@ -1930,6 +1936,7 @@ totalEffort is the sum of committed efforts and must not exceed ${capacity}. tas
 
       function handleExitDemo() {
         setIsDemo(false);
+        if (window.location.search) window.history.replaceState(null, '', window.location.pathname);
       }
 
       // Loading state

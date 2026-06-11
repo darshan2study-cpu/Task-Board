@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Darsh-Task Board</title>
+  <title>Task Board — AI Product Planning</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
@@ -149,6 +149,68 @@
     .demo-banner {
       background: linear-gradient(90deg, #1c1917 0%, #292524 100%);
     }
+
+    /* Priority Matrix */
+    .matrix-dot {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      width: 14px; height: 14px;
+      background: none; border: none; padding: 0;
+      cursor: pointer;
+      z-index: 1;
+    }
+    .matrix-dot:hover, .matrix-dot:focus-visible { z-index: 20; }
+    .matrix-dot .dot {
+      display: block;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      box-sizing: border-box;
+      transition: transform 0.12s ease;
+      position: relative;
+    }
+    .matrix-dot:hover .dot { transform: scale(1.4); }
+    .matrix-dot .dot-overdue {
+      position: absolute;
+      top: -4px; right: -4px;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+      border: 1.5px solid #fff;
+    }
+    .matrix-dot .dot-label {
+      position: absolute;
+      top: 50%; transform: translateY(-50%);
+      left: calc(100% + 7px);
+      font-family: 'DM Mono', monospace;
+      font-size: 10.5px;
+      color: #57534e;
+      background: rgba(255,255,255,0.9);
+      border: 1px solid rgba(28,25,23,0.06);
+      border-radius: 6px;
+      padding: 1px 6px;
+      white-space: nowrap;
+      transition: color 0.12s, box-shadow 0.12s;
+    }
+    .matrix-dot .dot-label.left {
+      left: auto;
+      right: calc(100% + 7px);
+    }
+    .matrix-dot:hover .dot-label {
+      color: #1c1917;
+      background: #fff;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    }
+    .matrix-corner {
+      position: absolute;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.5;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -162,13 +224,39 @@
     );
 
     /* ── Demo data ────────────────────────────────────── */
+    /* Dates are relative to "today" so the demo board never goes stale.
+       Impact/effort spread is deliberate: every matrix quadrant is populated,
+       two tasks share a cell (jitter demo), and two are unscored so the
+       AI score-suggest flow has something to do. */
+    const demoDay = offset => {
+      const d = new Date();
+      d.setDate(d.getDate() + offset);
+      return d.toISOString().slice(0, 10);
+    };
+
     const DEMO_TASKS = [
-      { id: 'd1', title: 'Define Q3 product roadmap', status: 'todo', priority: 'high', dueDate: '2026-06-15', description: 'Align with stakeholders on key themes and initiatives for Q3. Include engineering capacity estimates.', subtasks: [{ id: 's1', text: 'Draft initial themes', done: true }, { id: 's2', text: 'Review with engineering lead', done: false }, { id: 's3', text: 'Present to leadership', done: false }] },
-      { id: 'd2', title: 'User interview synthesis', status: 'todo', priority: 'high', dueDate: '2026-06-10', description: 'Synthesize findings from 8 user interviews conducted last week. Identify top 3 pain points.', subtasks: [{ id: 's4', text: 'Transcribe notes', done: true }, { id: 's5', text: 'Tag themes', done: true }, { id: 's6', text: 'Write synthesis doc', done: false }] },
-      { id: 'd3', title: 'Update onboarding flow', status: 'inprogress', priority: 'medium', dueDate: '2026-06-20', description: 'Redesign the onboarding checklist based on drop-off data. Focus on reducing steps 3 and 4.', subtasks: [] },
-      { id: 'd4', title: 'Competitive analysis — pricing', status: 'inprogress', priority: 'low', dueDate: '2026-06-25', description: 'Survey pricing pages of 5 competitors. Document positioning and packaging differences.', subtasks: [{ id: 's7', text: 'List competitors', done: true }, { id: 's8', text: 'Document pricing tiers', done: false }] },
-      { id: 'd5', title: 'Write release notes for v2.4', status: 'done', priority: 'medium', dueDate: '2026-06-01', description: 'Customer-facing release notes covering new dashboard, export feature, and bug fixes.', subtasks: [] },
-      { id: 'd6', title: 'Sprint retrospective action items', status: 'done', priority: 'low', dueDate: '2026-06-03', description: 'Document and assign follow-up actions from the sprint retro. Share with team by EOD.', subtasks: [{ id: 's9', text: 'Collect retro notes', done: true }, { id: 's10', text: 'Assign owners', done: true }] },
+      // Quick wins
+      { id: 't1', title: 'Fix broken signup analytics event', status: 'todo', priority: 'high', dueDate: demoDay(2), impact: 5, effort: 1, description: 'Signup conversion events stopped firing after the last release — the funnel dashboard is blind until this ships.', subtasks: [{ id: 's1', text: 'Reproduce on staging', done: true }, { id: 's2', text: 'Patch event payload', done: false }] },
+      { id: 't2', title: 'Add CSV export to reports', status: 'todo', priority: 'medium', dueDate: demoDay(9), impact: 4, effort: 2, description: 'Top request from three enterprise accounts. Unblocks their month-end reporting without support tickets.', subtasks: [] },
+      { id: 't3', title: 'Draft Q3 OKRs', status: 'inprogress', priority: 'high', dueDate: demoDay(4), impact: 4, effort: 2, description: 'First draft of Q3 objectives for leadership review. Anchor on activation and retention metrics.', subtasks: [{ id: 's3', text: 'Collect team inputs', done: true }, { id: 's4', text: 'Write draft objectives', done: true }, { id: 's5', text: 'Review with design + eng leads', done: false }] },
+      // Big bets
+      { id: 't4', title: 'Redesign onboarding flow', status: 'todo', priority: 'high', dueDate: demoDay(21), impact: 5, effort: 4, description: 'Drop-off at steps 3-4 is the biggest activation leak. Redesign around a 3-field setup and a sample workspace.', subtasks: [{ id: 's6', text: 'Synthesize drop-off data', done: true }, { id: 's7', text: 'Wireframe new flow', done: false }, { id: 's8', text: 'Usability test with 5 users', done: false }] },
+      { id: 't5', title: 'Self-serve plan upgrades', status: 'todo', priority: 'medium', dueDate: demoDay(30), impact: 5, effort: 5, description: 'Move upgrades out of the sales-assisted flow. Big revenue lever, big surface area: billing, entitlements, comms.', subtasks: [] },
+      { id: 't6', title: 'Usage-based pricing experiment', status: 'todo', priority: 'medium', dueDate: demoDay(35), impact: 4, effort: 4, description: 'Test a metered tier with 20 design partners. Needs metering, a pricing page variant, and a rollback plan.', subtasks: [] },
+      // Fill-ins
+      { id: 't7', title: 'Refresh empty-state illustrations', status: 'todo', priority: 'low', dueDate: demoDay(14), impact: 2, effort: 1, description: 'Current empty states are placeholder gray boxes. Small polish, low urgency.', subtasks: [] },
+      { id: 't8', title: 'Update API docs for v2 endpoints', status: 'inprogress', priority: 'medium', dueDate: demoDay(6), impact: 3, effort: 2, description: 'Two integration partners hit breaking differences this sprint — the reference still documents v1.', subtasks: [{ id: 's9', text: 'Audit changed endpoints', done: true }, { id: 's10', text: 'Rewrite auth section', done: false }] },
+      { id: 't9', title: 'Archive stale feature flags', status: 'todo', priority: 'low', dueDate: demoDay(18), impact: 2, effort: 2, description: '14 flags are fully rolled out but still in code. Cleanup reduces config risk.', subtasks: [] },
+      { id: 't10', title: 'Sprint 24 retro action items', status: 'inprogress', priority: 'medium', dueDate: demoDay(-2), impact: 3, effort: 1, description: 'Document and assign the three follow-ups from retro. Already overdue.', subtasks: [{ id: 's11', text: 'Collect retro notes', done: true }, { id: 's12', text: 'Assign owners', done: false }] },
+      // Time sinks
+      { id: 't11', title: 'Rebuild admin panel in new framework', status: 'todo', priority: 'low', dueDate: demoDay(40), impact: 2, effort: 5, description: 'Engineering-driven rewrite request. No user-facing change; parked pending a stronger case.', subtasks: [] },
+      { id: 't12', title: 'Custom theming engine', status: 'todo', priority: 'low', dueDate: demoDay(45), impact: 2, effort: 4, description: 'One large account asked for white-labeling. High build cost for a single-account need.', subtasks: [] },
+      // Unscored — feed for the AI score-suggest flow
+      { id: 't13', title: 'Churned-account interview synthesis', status: 'todo', priority: 'high', dueDate: demoDay(-1), impact: null, effort: null, description: 'Synthesize 6 churn interviews into the top 3 cancellation drivers. Input for the Q3 retention bet.', subtasks: [{ id: 's13', text: 'Transcribe interviews', done: true }, { id: 's14', text: 'Tag themes', done: true }, { id: 's15', text: 'Write synthesis doc', done: false }] },
+      { id: 't14', title: 'Competitive pricing teardown', status: 'inprogress', priority: 'medium', dueDate: demoDay(7), impact: null, effort: null, description: 'Document packaging and pricing for the top 5 competitors ahead of the pricing experiment.', subtasks: [] },
+      // Done
+      { id: 't15', title: 'Ship v2.4 release notes', status: 'done', priority: 'medium', dueDate: demoDay(-5), impact: 2, effort: 1, description: 'Customer-facing notes covering the new dashboard and export fixes.', subtasks: [] },
+      { id: 't16', title: 'Q2 metrics review for the board', status: 'done', priority: 'high', dueDate: demoDay(-8), impact: 4, effort: 2, description: 'Quarterly product metrics pack: activation, retention, NRR.', subtasks: [{ id: 's16', text: 'Pull metrics', done: true }, { id: 's17', text: 'Build deck', done: true }] },
     ];
 
     /* ── DB row → app task ───────────────────────────── */
@@ -181,6 +269,8 @@
         dueDate:     row.due_date || '',
         description: row.description || '',
         subtasks:    Array.isArray(row.subtasks) ? row.subtasks : [],
+        impact:      Number.isInteger(row.impact) ? row.impact : null,
+        effort:      Number.isInteger(row.effort) ? row.effort : null,
       };
     }
 
@@ -196,6 +286,32 @@
       low:    { label: 'Low',    badgeClass: 'bg-stone-100 text-stone-500' },
       medium: { label: 'Medium', badgeClass: 'bg-blue-100 text-blue-700' },
       high:   { label: 'High',   badgeClass: 'bg-red-100 text-red-600' },
+    };
+
+    /* ── Impact / Effort scoring ──────────────────────── */
+    const SCORE_SCALE = [1, 2, 3, 4, 5];
+
+    function isScored(t) {
+      return Number.isInteger(t.impact) && Number.isInteger(t.effort);
+    }
+
+    /* Quadrant boundary sits at the scale midpoint (3):
+       impact > 3 counts as high impact, effort <= 3 as low effort. */
+    function quadrantOf(t) {
+      if (!isScored(t)) return null;
+      const highImpact = t.impact > 3;
+      const lowEffort  = t.effort <= 3;
+      if (highImpact && lowEffort)  return 'quickwin';
+      if (highImpact && !lowEffort) return 'bigbet';
+      if (!highImpact && lowEffort) return 'fillin';
+      return 'timesink';
+    }
+
+    const QUADRANT_META = {
+      quickwin: { label: 'Quick Win', chipClass: 'bg-emerald-100 text-emerald-700', dot: '#10b981', tint: 'rgba(16,185,129,0.05)',  labelColor: '#047857' },
+      bigbet:   { label: 'Big Bet',   chipClass: 'bg-indigo-100 text-indigo-700',   dot: '#6366f1', tint: 'rgba(99,102,241,0.05)',  labelColor: '#4338ca' },
+      fillin:   { label: 'Fill-in',   chipClass: 'bg-stone-200 text-stone-600',     dot: '#a8a29e', tint: 'rgba(168,162,158,0.08)', labelColor: '#78716c' },
+      timesink: { label: 'Time Sink', chipClass: 'bg-red-100 text-red-600',         dot: '#ef4444', tint: 'rgba(239,68,68,0.04)',   labelColor: '#b91c1c' },
     };
 
     function formatDate(iso) {
@@ -216,35 +332,126 @@
       return Math.random().toString(36).slice(2, 10);
     }
 
-    /* ── Groq API call ────────────────────────────────── */
-    async function fetchGroqPrioritization(tasks) {
-      const activeTasks = tasks.filter(t => t.status !== 'done');
-      if (activeTasks.length === 0) return "No active tasks to prioritize.";
+    /* ── Groq API calls ───────────────────────────────── */
+    const GROQ_PROXY_URL = 'https://uqbvpytbqvlubuekgcbz.supabase.co/functions/v1/groq-proxy';
+    const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
-      const taskList = activeTasks.map((t, i) => {
-        const due = t.dueDate ? `due ${t.dueDate}` : 'no due date';
-        return `${i + 1}. "${t.title}" — status: ${t.status}, priority: ${t.priority}, ${due}`;
-      }).join('\n');
-
-      const prompt = `You are a productivity assistant. Here are my current active tasks:\n\n${taskList}\n\nAnalyze these tasks and tell me which ones I should focus on first and why. Consider urgency (due dates), priority labels, and current status. Be concise and actionable — a ranked recommendation with brief reasoning for each.`;
-
-      const res = await fetch('https://uqbvpytbqvlubuekgcbz.supabase.co/functions/v1/groq-proxy', {
+    async function groqChat(prompt, maxTokens) {
+      const res = await fetch(GROQ_PROXY_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: GROQ_MODEL,
           messages: [{ role: 'user', content: prompt }],
-          max_tokens: 1000,
+          max_tokens: maxTokens,
         }),
       });
-
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
         throw new Error(errBody?.error?.message || `Groq API error: ${res.status}`);
       }
-
       const data = await res.json();
-      return data.choices?.[0]?.message?.content || 'No response received.';
+      return data.choices?.[0]?.message?.content || '';
+    }
+
+    async function groqJSON(prompt, maxTokens) {
+      const text = await groqChat(prompt, maxTokens);
+      return JSON.parse(text.replace(/```json|```/g, '').trim());
+    }
+
+    /* AI scoring assist: the model proposes impact/effort, the human
+       confirms or overrides — same contract as the rest of the AI here. */
+    async function fetchScoreSuggestion(task) {
+      const prompt = `You are a product planning assistant. Score this task on an impact/effort scale.
+
+Task: "${task.title}"
+${task.description ? 'Details: ' + task.description : ''}
+
+impact: 1 (negligible user or business value) to 5 (major value)
+effort: 1 (a few hours) to 5 (multiple weeks)
+
+Return ONLY valid JSON, no markdown:
+{ "impact": n, "effort": n, "rationale": "one short sentence explaining both scores" }`;
+      const parsed = await groqJSON(prompt, 200);
+      const clamp = v => SCORE_SCALE.includes(v) ? v : null;
+      return {
+        impact: clamp(parsed.impact),
+        effort: clamp(parsed.effort),
+        rationale: typeof parsed.rationale === 'string' ? parsed.rationale : '',
+      };
+    }
+
+    /* Serialize the full signal set per task — status, priority, deadline,
+       subtask progress, and impact/effort — so the model ranks on structure,
+       not guesswork. */
+    function serializeTasks(activeTasks) {
+      return activeTasks.map((t, i) => {
+        const parts = [
+          `status: ${t.status}`,
+          `priority: ${t.priority}`,
+          t.dueDate ? `due ${t.dueDate}${isOverdue(t.dueDate) ? ' (OVERDUE)' : ''}` : 'no due date',
+          t.subtasks.length ? `subtasks ${t.subtasks.filter(s => s.done).length}/${t.subtasks.length} done` : 'no subtasks',
+          isScored(t) ? `impact ${t.impact}/5, effort ${t.effort}/5 (${QUADRANT_META[quadrantOf(t)].label})` : 'not scored yet',
+        ];
+        return `[${i + 1}] "${t.title}" — ${parts.join(', ')}`;
+      }).join('\n');
+    }
+
+    async function fetchRankAnalysis(activeTasks) {
+      const prompt = `You are a product planning assistant helping a product manager decide what to work on.
+
+Active tasks:
+${serializeTasks(activeTasks)}
+
+Rank what to do first. Weigh: overdue work, impact-to-effort ratio, in-progress momentum (finishing beats starting), and deadline proximity.
+
+Return ONLY valid JSON, no markdown:
+{
+  "summary": "1-2 sentences on the overall sequencing logic",
+  "ranked": [{ "rank": 1, "title": "task title", "reason": "one sentence why", "taskIndex": 1 }],
+  "defer": [{ "title": "task title", "reason": "one sentence why this can wait", "taskIndex": 4 }]
+}
+Rank at most 5 tasks in "ranked". Put 2-4 tasks in "defer". taskIndex is the [n] number above.`;
+      return groqJSON(prompt, 1200);
+    }
+
+    async function fetchSprintPlan(activeTasks, capacity) {
+      const prompt = `You are a product planning assistant helping a product manager plan a sprint.
+
+Active tasks:
+${serializeTasks(activeTasks)}
+
+Sprint capacity: ${capacity} effort points. Each task costs its effort score (1-5); treat unscored tasks as effort 2 if you include them. Choose the set of tasks to commit this sprint — maximize impact within capacity, deal with overdue work, and prefer finishing in-progress tasks over starting new ones. Everything else is explicitly deferred.
+
+Return ONLY valid JSON, no markdown:
+{
+  "theme": "one-line sprint goal naming what this sprint is about",
+  "committed": [{ "title": "task title", "reason": "one sentence why it made the cut", "effort": n, "taskIndex": 1 }],
+  "deferred": [{ "title": "task title", "reason": "one sentence why it waits", "taskIndex": 4 }],
+  "totalEffort": n,
+  "risk": "the single biggest risk in this plan, one sentence"
+}
+totalEffort is the sum of committed efforts and must not exceed ${capacity}. taskIndex is the [n] number above.`;
+      return groqJSON(prompt, 1500);
+    }
+
+    /* Fingerprint of everything the AI reasons over — when it changes,
+       the persisted analysis is flagged stale. */
+    function planSignature(tasks) {
+      return tasks
+        .filter(t => t.status !== 'done')
+        .map(t => [t.id, t.status, t.dueDate, t.impact, t.effort, t.subtasks.filter(s => s.done).length + '/' + t.subtasks.length].join(':'))
+        .sort()
+        .join('|');
+    }
+
+    function fmtRelative(iso) {
+      if (!iso) return '';
+      const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+      if (s < 60) return 'just now';
+      const m = Math.floor(s / 60); if (m < 60) return m + 'm ago';
+      const h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
+      return Math.floor(h / 24) + 'd ago';
     }
 
     /* ── DemoBanner ───────────────────────────────────── */
@@ -353,24 +560,150 @@
       );
     }
 
-    /* ── AIPriorityPanel ──────────────────────────────── */
-    function AIPriorityPanel({ response, onClose }) {
+    /* ── AIPlanPanel ──────────────────────────────────── */
+    /* Renders both analysis modes. Every item links back to its source
+       task; the panel persists and flags itself stale when the board
+       changes — the same trust contract as Pulse. */
+    function AIPlanPanel({ record, isStale, onDismiss, onRerun, onOpenTask }) {
+      const { mode, result, taskIds, capacity, analyzedAt } = record;
+      const open = idx => { if (idx) onOpenTask(taskIds[idx - 1]); };
+
+      function PlanItem({ children, taskIndex, tone }) {
+        const tones = {
+          rank:   'bg-stone-50 border-stone-200 hover:border-amber-400',
+          commit: 'bg-emerald-50/60 border-emerald-200 hover:border-emerald-400',
+          defer:  'bg-stone-50 border-stone-200 hover:border-stone-400',
+        };
+        return (
+          <button onClick={() => open(taskIndex)} title="Open the underlying task"
+            className={`w-full text-left border rounded-xl px-3.5 py-2.5 transition-colors ${tones[tone]}`}>
+            {children}
+            <span className="block font-mono text-[10px] text-amber-700/70 mt-1.5">view task →</span>
+          </button>
+        );
+      }
+
       return (
         <div className="ai-panel mb-8 bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-stone-100 bg-stone-50">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-stone-100 bg-stone-50 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-amber-500">
                 <path d="M7 1L8.5 5.5L13 7L8.5 8.5L7 13L5.5 8.5L1 7L5.5 5.5L7 1Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" fill="currentColor" fillOpacity="0.15"/>
               </svg>
-              <span className="font-display font-700 text-sm text-stone-800 tracking-tight">AI Priority Analysis</span>
-              <span className="font-mono text-[10px] text-stone-400 bg-stone-100 px-2 py-0.5 rounded-full">llama3-8b</span>
+              <span className="font-display font-700 text-sm text-stone-800 tracking-tight">
+                {mode === 'sprint' ? 'AI Sprint Plan' : 'AI Priority Analysis'}
+              </span>
+              <span className="font-mono text-[10px] text-stone-400 bg-stone-100 px-2 py-0.5 rounded-full">llama-3.3-70b</span>
+              <span className="font-mono text-[10px] text-stone-400">
+                {taskIds.length} active tasks · {fmtRelative(analyzedAt)}{mode === 'sprint' && capacity ? ` · capacity ${capacity} pts` : ''}
+              </span>
+              {isStale && (
+                <>
+                  <span className="confirm-banner font-mono text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                    Stale — board changed since this run
+                  </span>
+                  <button onClick={onRerun}
+                    className="font-mono text-[10px] text-amber-700 underline underline-offset-2 hover:text-amber-900 transition-colors">
+                    Re-run
+                  </button>
+                </>
+              )}
             </div>
-            <button onClick={onClose}
+            <button onClick={onDismiss}
               className="w-6 h-6 flex items-center justify-center rounded-lg text-stone-400 hover:bg-stone-200 hover:text-stone-600 transition-colors text-base leading-none"
-              title="Dismiss">×</button>
+              title="Dismiss and clear">×</button>
           </div>
-          <div className="px-5 py-4">
-            <p className="groq-response font-mono text-xs text-stone-600 leading-relaxed">{response}</p>
+
+          <div className="px-5 py-4 flex flex-col gap-5">
+            {mode === 'rank' ? (
+              <>
+                {result.summary && (
+                  <p className="font-mono text-xs text-stone-500 italic leading-relaxed border-b border-stone-100 pb-3.5">{result.summary}</p>
+                )}
+                {result.ranked && result.ranked.length > 0 && (
+                  <div>
+                    <p className="font-mono text-[10px] text-stone-400 uppercase tracking-widest mb-2.5">Do first</p>
+                    <div className="flex flex-col gap-2">
+                      {result.ranked.map((item, i) => (
+                        <PlanItem key={i} taskIndex={item.taskIndex} tone="rank">
+                          <span className="flex items-start gap-2.5">
+                            <span className="font-mono text-[10px] font-medium bg-stone-900 text-white px-2 py-0.5 rounded-full shrink-0 mt-0.5">#{item.rank}</span>
+                            <span className="flex-1">
+                              <span className="block font-mono text-sm text-stone-800">{item.title}</span>
+                              <span className="block font-mono text-xs text-stone-500 mt-0.5 leading-relaxed">{item.reason}</span>
+                            </span>
+                          </span>
+                        </PlanItem>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {result.defer && result.defer.length > 0 && (
+                  <div>
+                    <p className="font-mono text-[10px] text-stone-400 uppercase tracking-widest mb-2.5">Can wait</p>
+                    <div className="flex flex-col gap-2">
+                      {result.defer.map((item, i) => (
+                        <PlanItem key={i} taskIndex={item.taskIndex} tone="defer">
+                          <span className="block font-mono text-sm text-stone-700">{item.title}</span>
+                          <span className="block font-mono text-xs text-stone-500 mt-0.5 leading-relaxed">{item.reason}</span>
+                        </PlanItem>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {result.theme && (
+                  <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
+                    <p className="font-mono text-[10px] text-indigo-400 uppercase tracking-widest mb-1">Sprint goal</p>
+                    <p className="font-display font-700 text-sm text-indigo-900 tracking-tight">{result.theme}</p>
+                  </div>
+                )}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="font-mono text-[10px] text-stone-400 uppercase tracking-widest">
+                      Committed · {result.totalEffort || 0} of {capacity} pts
+                    </p>
+                  </div>
+                  <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden mb-3">
+                    <div className={`h-full rounded-full transition-all duration-300 ${(result.totalEffort || 0) > capacity ? 'bg-red-400' : 'bg-emerald-400'}`}
+                      style={{ width: `${Math.min(100, ((result.totalEffort || 0) / capacity) * 100)}%` }} />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {(result.committed || []).map((item, i) => (
+                      <PlanItem key={i} taskIndex={item.taskIndex} tone="commit">
+                        <span className="flex items-start gap-2.5">
+                          <span className="font-mono text-[10px] font-medium bg-emerald-600 text-white px-2 py-0.5 rounded-full shrink-0 mt-0.5">{item.effort || '?'} pt{item.effort === 1 ? '' : 's'}</span>
+                          <span className="flex-1">
+                            <span className="block font-mono text-sm text-stone-800">{item.title}</span>
+                            <span className="block font-mono text-xs text-stone-500 mt-0.5 leading-relaxed">{item.reason}</span>
+                          </span>
+                        </span>
+                      </PlanItem>
+                    ))}
+                  </div>
+                </div>
+                {result.deferred && result.deferred.length > 0 && (
+                  <div>
+                    <p className="font-mono text-[10px] text-stone-400 uppercase tracking-widest mb-2.5">Explicitly deferred</p>
+                    <div className="flex flex-col gap-2">
+                      {result.deferred.map((item, i) => (
+                        <PlanItem key={i} taskIndex={item.taskIndex} tone="defer">
+                          <span className="block font-mono text-sm text-stone-700">{item.title}</span>
+                          <span className="block font-mono text-xs text-stone-500 mt-0.5 leading-relaxed">{item.reason}</span>
+                        </PlanItem>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {result.risk && (
+                  <p className="font-mono text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 leading-relaxed">
+                    <span className="font-medium">Risk to watch:</span> {result.risk}
+                  </p>
+                )}
+              </>
+            )}
           </div>
         </div>
       );
@@ -386,6 +719,11 @@
       const [newSubtask, setNewSubtask] = React.useState('');
       const [saving, setSaving] = React.useState(false);
       const [confirmDone, setConfirmDone] = React.useState(false);
+      const [impact, setImpact] = React.useState(task.impact);
+      const [effort, setEffort] = React.useState(task.effort);
+      const [scoreSuggesting, setScoreSuggesting] = React.useState(false);
+      const [scoreRationale, setScoreRationale] = React.useState('');
+      const [scoreError, setScoreError] = React.useState('');
       const [validationError, setValidationError] = React.useState('');
       const [invalidFields, setInvalidFields] = React.useState([]);
 
@@ -419,7 +757,7 @@
       function handleSave() {
         if (!validateMandatoryFields()) return;
         setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 1800);
+        setTimeout(onClose, 450); // fields auto-save on change; this validates and closes
       }
 
       React.useEffect(() => {
@@ -457,6 +795,35 @@
       async function handleDescriptionBlur() {
         if (description !== task.description) await save({ description: description || null });
         if (description.trim()) setInvalidFields(prev => prev.filter(f => f !== 'description'));
+      }
+
+      async function handleImpactChange(e) {
+        const val = e.target.value ? Number(e.target.value) : null;
+        setImpact(val);
+        await save({ impact: val });
+      }
+
+      async function handleEffortChange(e) {
+        const val = e.target.value ? Number(e.target.value) : null;
+        setEffort(val);
+        await save({ effort: val });
+      }
+
+      async function handleSuggestScores() {
+        if (scoreSuggesting) return;
+        setScoreSuggesting(true); setScoreError(''); setScoreRationale('');
+        try {
+          const s = await fetchScoreSuggestion({ title, description });
+          if (s.impact) setImpact(s.impact);
+          if (s.effort) setEffort(s.effort);
+          if (s.impact || s.effort) {
+            await save({ impact: s.impact != null ? s.impact : impact, effort: s.effort != null ? s.effort : effort });
+          }
+          setScoreRationale(s.rationale || 'Scores suggested — adjust if you disagree.');
+        } catch (err) {
+          setScoreError('Could not suggest scores: ' + err.message);
+        }
+        setScoreSuggesting(false);
       }
 
       async function toggleSubtask(id) {
@@ -566,6 +933,69 @@
                 </div>
               </div>
 
+              {/* Impact / Effort scoring */}
+              <div className="flex flex-col gap-2.5 bg-stone-50 border border-stone-200 rounded-xl px-4 py-3.5">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <label className="font-mono text-[11px] text-stone-400 uppercase tracking-widest">Impact / Effort</label>
+                  {(() => {
+                    const q = quadrantOf({ impact, effort });
+                    return q ? (
+                      <span className={`font-mono text-[10px] font-medium px-2 py-0.5 rounded-full ${QUADRANT_META[q].chipClass}`}>
+                        {QUADRANT_META[q].label}
+                      </span>
+                    ) : (
+                      <span className="font-mono text-[10px] text-stone-300">unscored</span>
+                    );
+                  })()}
+                </div>
+                <div className="flex gap-3 flex-wrap items-end">
+                  <div className="flex flex-col gap-1 flex-1 min-w-28">
+                    <label className="font-mono text-[10px] text-stone-400">Impact</label>
+                    <select value={impact != null ? impact : ''} onChange={handleImpactChange}
+                      className="font-mono text-sm bg-white border border-stone-200 rounded-xl px-3 py-2 text-stone-700 focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer">
+                      <option value="">Not set</option>
+                      <option value="1">1 · minimal</option>
+                      <option value="2">2</option>
+                      <option value="3">3 · meaningful</option>
+                      <option value="4">4</option>
+                      <option value="5">5 · major</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1 flex-1 min-w-28">
+                    <label className="font-mono text-[10px] text-stone-400">Effort</label>
+                    <select value={effort != null ? effort : ''} onChange={handleEffortChange}
+                      className="font-mono text-sm bg-white border border-stone-200 rounded-xl px-3 py-2 text-stone-700 focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer">
+                      <option value="">Not set</option>
+                      <option value="1">1 · hours</option>
+                      <option value="2">2</option>
+                      <option value="3">3 · days</option>
+                      <option value="4">4</option>
+                      <option value="5">5 · weeks</option>
+                    </select>
+                  </div>
+                  <button type="button" onClick={handleSuggestScores} disabled={scoreSuggesting || !title.trim()}
+                    title="Let AI suggest impact and effort from the title and description"
+                    className="flex items-center gap-1.5 font-mono text-xs border border-amber-300 bg-amber-50 text-amber-800 px-3 py-2 rounded-xl hover:bg-amber-100 hover:border-amber-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
+                    {scoreSuggesting ? (
+                      <><span className="spinner" style={{borderColor:'rgba(180,83,9,0.3)', borderTopColor:'#b45309'}}></span>Scoring…</>
+                    ) : (
+                      <>
+                        <svg width="11" height="11" viewBox="0 0 14 14" fill="none" className="text-amber-500">
+                          <path d="M7 1L8.5 5.5L13 7L8.5 8.5L7 13L5.5 8.5L1 7L5.5 5.5L7 1Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" fill="currentColor" fillOpacity="0.2"/>
+                        </svg>
+                        AI suggest
+                      </>
+                    )}
+                  </button>
+                </div>
+                {scoreRationale && (
+                  <p className="confirm-banner font-mono text-[11px] text-amber-700 leading-relaxed">✦ {scoreRationale} <span className="text-stone-400">— adjust if you disagree.</span></p>
+                )}
+                {scoreError && (
+                  <p className="confirm-banner font-mono text-[11px] text-red-600">{scoreError}</p>
+                )}
+              </div>
+
               <div className="flex flex-col gap-1.5">
                 <label className="font-mono text-[11px] text-stone-400 uppercase tracking-widest">
                   Description <span className="text-red-400">*</span>
@@ -616,7 +1046,7 @@
 
             <div className="px-6 py-4 border-t border-stone-100 flex items-center justify-between">
               <p className="font-mono text-[10px] text-stone-400">
-                <span className="text-red-400">*</span> required fields
+                <span className="text-red-400">*</span> required · changes save automatically
               </p>
               <button onClick={handleSave}
                 className={`font-mono text-xs px-4 py-2 rounded-xl transition-all ${
@@ -624,7 +1054,7 @@
                     ? 'bg-emerald-600 text-white border border-emerald-600'
                     : 'text-stone-700 border border-stone-300 bg-white hover:bg-stone-900 hover:text-white hover:border-stone-900'
                 }`}>
-                {saveSuccess ? '✓ Saved' : 'Save'}
+                {saveSuccess ? '✓ Saved' : 'Save & close'}
               </button>
             </div>
           </div>
@@ -729,7 +1159,17 @@
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 mt-1.5">
+              <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                {isScored(task) && (() => {
+                  const q = quadrantOf(task);
+                  const m = QUADRANT_META[q];
+                  return (
+                    <span className={`font-mono text-[10px] font-medium px-2 py-0.5 rounded-full ${m.chipClass}`}
+                      title={`${m.label} — impact ${task.impact}/5, effort ${task.effort}/5`}>
+                      I{task.impact}·E{task.effort}
+                    </span>
+                  );
+                })()}
                 {formattedDate && (
                   <div className={`flex items-center gap-1 font-mono text-[11px] ${overdue ? 'text-red-500' : 'text-stone-400'}`}>
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
@@ -807,6 +1247,144 @@
       );
     }
 
+    /* ── Priority Matrix ──────────────────────────────── */
+    function MatrixView({ tasks, onOpenTask }) {
+      const active   = tasks.filter(t => t.status !== 'done');
+      const scored   = active.filter(isScored);
+      const unscored = active.filter(t => !isScored(t));
+
+      // Tasks sharing an impact/effort cell fan out around the cell centre
+      const cells = {};
+      scored.forEach(t => {
+        const key = `${t.impact}-${t.effort}`;
+        (cells[key] = cells[key] || []).push(t);
+      });
+
+      const PAD = 8; // % inset so extreme scores don't touch the plot edge
+      function posOf(t) {
+        const group = cells[`${t.impact}-${t.effort}`];
+        const idx = group.indexOf(t);
+        const x = PAD + ((t.effort - 1) / 4) * (100 - PAD * 2);
+        const y = PAD + ((5 - t.impact) / 4) * (100 - PAD * 2);
+        if (group.length === 1) return { x, y };
+        const angle = (2 * Math.PI * idx) / group.length - Math.PI / 2;
+        return { x: x + Math.cos(angle) * 3, y: y + Math.sin(angle) * 4.5 };
+      }
+
+      const counts = { quickwin: 0, bigbet: 0, fillin: 0, timesink: 0 };
+      scored.forEach(t => { counts[quadrantOf(t)] += 1; });
+
+      const truncate = (s, n) => s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s;
+
+      return (
+        <div className="card-enter bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+          {/* Header + legend */}
+          <div className="flex items-center justify-between gap-3 flex-wrap px-6 py-4 border-b border-stone-100">
+            <div>
+              <h2 className="font-display font-700 text-stone-800 text-base tracking-tight">Priority Matrix</h2>
+              <p className="font-mono text-[11px] text-stone-400 mt-0.5">
+                impact vs effort · {scored.length} of {active.length} active tasks scored
+              </p>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {Object.keys(QUADRANT_META).map(q => (
+                <span key={q} className={`font-mono text-[10px] font-medium px-2 py-0.5 rounded-full ${QUADRANT_META[q].chipClass}`}>
+                  {QUADRANT_META[q].label} · {counts[q]}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Plot */}
+          <div className="px-5 pt-5 pb-3">
+            <div className="flex gap-2">
+              <div className="flex items-center shrink-0">
+                <span className="font-mono text-[10px] text-stone-400" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+                  Impact ↑
+                </span>
+              </div>
+              <div className="relative flex-1" style={{ aspectRatio: '16 / 10' }}>
+                {/* Quadrant tints */}
+                <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 rounded-xl overflow-hidden border border-stone-200">
+                  <div style={{ background: QUADRANT_META.quickwin.tint }} />
+                  <div style={{ background: QUADRANT_META.bigbet.tint }} />
+                  <div style={{ background: QUADRANT_META.fillin.tint }} />
+                  <div style={{ background: QUADRANT_META.timesink.tint }} />
+                </div>
+                {/* Midlines */}
+                <div className="absolute left-1/2 top-1 bottom-1 border-l border-dashed border-stone-300" />
+                <div className="absolute top-1/2 left-1 right-1 border-t border-dashed border-stone-300" />
+                {/* Corner labels */}
+                <span className="matrix-corner" style={{ top: 10, left: 14, color: QUADRANT_META.quickwin.labelColor }}>Quick wins</span>
+                <span className="matrix-corner" style={{ top: 10, right: 14, color: QUADRANT_META.bigbet.labelColor }}>Big bets</span>
+                <span className="matrix-corner" style={{ bottom: 10, left: 14, color: QUADRANT_META.fillin.labelColor }}>Fill-ins</span>
+                <span className="matrix-corner" style={{ bottom: 10, right: 14, color: QUADRANT_META.timesink.labelColor }}>Time sinks</span>
+
+                {scored.length === 0 && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <p className="font-mono text-xs text-stone-400 text-center px-8">
+                      No scored tasks yet — open a task and set impact and effort (or let AI suggest them).
+                    </p>
+                  </div>
+                )}
+
+                {/* Task dots */}
+                {scored.map(t => {
+                  const { x, y } = posOf(t);
+                  const q = quadrantOf(t);
+                  const m = QUADRANT_META[q];
+                  const overdue = isOverdue(t.dueDate);
+                  const inProgress = t.status === 'inprogress';
+                  return (
+                    <button
+                      key={t.id}
+                      className="matrix-dot"
+                      style={{ left: x + '%', top: y + '%' }}
+                      onClick={() => onOpenTask(t)}
+                      title={`${t.title} — impact ${t.impact}/5 · effort ${t.effort}/5 · ${COLUMN_META[t.status].label}${overdue ? ' · OVERDUE' : ''}`}
+                    >
+                      <span className="dot" style={{
+                        background: m.dot,
+                        boxShadow: inProgress ? `0 0 0 3.5px ${m.dot}40` : '0 1px 4px rgba(0,0,0,0.15)',
+                      }}>
+                        {overdue && <span className="dot-overdue" />}
+                      </span>
+                      <span className={`dot-label${t.effort >= 4 ? ' left' : ''}`}>{truncate(t.title, 26)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="flex items-center justify-between mt-2 pl-6 pr-1">
+              <span className="font-mono text-[10px] text-stone-400">← low effort</span>
+              <span className="font-mono text-[10px] text-stone-400">ring = in progress · red dot = overdue</span>
+              <span className="font-mono text-[10px] text-stone-400">high effort →</span>
+            </div>
+          </div>
+
+          {/* Unscored tasks */}
+          {unscored.length > 0 && (
+            <div className="border-t border-stone-100 bg-stone-50 px-6 py-4">
+              <p className="font-mono text-[11px] text-stone-400 uppercase tracking-widest mb-2.5">
+                Needs scoring · {unscored.length}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {unscored.map(t => (
+                  <button key={t.id} onClick={() => onOpenTask(t)}
+                    className="font-mono text-xs bg-white border border-amber-200 text-stone-600 px-3 py-1.5 rounded-lg hover:border-amber-400 hover:bg-amber-50 transition-colors">
+                    {t.title} <span className="text-amber-600 ml-1">score →</span>
+                  </button>
+                ))}
+              </div>
+              <p className="font-mono text-[10px] text-stone-400 mt-2.5">
+                Tip: open a task and hit <span className="text-amber-700">AI suggest</span> to score it in one click.
+              </p>
+            </div>
+          )}
+        </div>
+      );
+    }
+
     /* ── TaskBoard ────────────────────────────────────── */
     function TaskBoard({ user, isDemo = false, onExitDemo }) {
       const [tasks, setTasks] = React.useState(isDemo ? DEMO_TASKS : []);
@@ -814,9 +1392,15 @@
       const [input, setInput] = React.useState('');
       const [error, setError] = React.useState('');
       const [aiLoading, setAiLoading] = React.useState(false);
-      const [aiResponse, setAiResponse] = React.useState(null);
+      const [aiRecord, setAiRecord] = React.useState(null);
+      const [sprintSetupOpen, setSprintSetupOpen] = React.useState(false);
+      const [sprintCapacity, setSprintCapacity] = React.useState(10);
       const [detailTask, setDetailTask] = React.useState(null);
       const [overdueFilter, setOverdueFilter] = React.useState(false);
+      const [view, setView] = React.useState(() => {
+        const v = new URLSearchParams(window.location.search).get('view');
+        return ['board', 'matrix'].includes(v) ? v : 'board';
+      });
       const [draggingId, setDraggingId] = React.useState(null);
       const draggingIdRef = React.useRef(null);
       const errorTimerRef = React.useRef(null);
@@ -843,18 +1427,61 @@
         fetchTasks();
       }, [isDemo]);
 
-      async function handleAIPrioritize() {
-        if (aiLoading) return;
-        setAiResponse(null);
-        setAiLoading(true);
+      const analysisKey = 'taskboard:analysis:' + (isDemo ? 'demo' : user.id);
+
+      React.useEffect(() => {
         try {
-          const result = await fetchGroqPrioritization(tasks);
-          setAiResponse(result);
-        } catch (err) {
-          showError('AI prioritization failed: ' + err.message);
-        } finally {
+          const raw = localStorage.getItem(analysisKey);
+          if (raw) {
+            const rec = JSON.parse(raw);
+            if (rec && rec.mode && rec.result && Array.isArray(rec.taskIds)) setAiRecord(rec);
+          }
+        } catch (_) { /* corrupt record — start fresh */ }
+      }, []);
+
+      async function runAnalysis(mode, capacity) {
+        if (aiLoading) return;
+        setSprintSetupOpen(false);
+        setAiLoading(true);
+        const active = tasks.filter(t => t.status !== 'done');
+        if (active.length === 0) {
+          showError('No active tasks to analyze.');
           setAiLoading(false);
+          return;
         }
+        try {
+          const result = mode === 'sprint'
+            ? await fetchSprintPlan(active, capacity)
+            : await fetchRankAnalysis(active);
+          const record = {
+            mode,
+            result,
+            capacity: mode === 'sprint' ? capacity : null,
+            taskIds: active.map(t => t.id),
+            analyzedAt: new Date().toISOString(),
+            snapshot: planSignature(tasks),
+          };
+          setAiRecord(record);
+          try { localStorage.setItem(analysisKey, JSON.stringify(record)); } catch (_) {}
+        } catch (err) {
+          showError((mode === 'sprint' ? 'Sprint planning' : 'AI prioritization') + ' failed: ' + err.message);
+        }
+        setAiLoading(false);
+      }
+
+      function dismissAnalysis() {
+        setAiRecord(null);
+        try { localStorage.removeItem(analysisKey); } catch (_) {}
+      }
+
+      function rerunAnalysis() {
+        if (!aiRecord) return;
+        runAnalysis(aiRecord.mode, aiRecord.capacity || sprintCapacity);
+      }
+
+      function openTaskById(id) {
+        const t = tasks.find(x => x.id === id);
+        if (t) setDetailTask(t);
       }
 
       async function addTask(e) {
@@ -954,31 +1581,27 @@
       }
 
       async function patchTask(id, patch) {
-        setTasks(prev => prev.map(t => {
-          if (t.id !== id) return t;
+        function applyPatch(t) {
           const updated = { ...t };
           if ('title' in patch)       updated.title       = patch.title;
           if ('priority' in patch)    updated.priority    = patch.priority;
           if ('due_date' in patch)    updated.dueDate     = patch.due_date || '';
           if ('description' in patch) updated.description = patch.description || '';
           if ('subtasks' in patch)    updated.subtasks    = patch.subtasks || [];
+          if ('impact' in patch)      updated.impact      = patch.impact;
+          if ('effort' in patch)      updated.effort      = patch.effort;
           return updated;
-        }));
+        }
 
-        setDetailTask(prev => {
-          if (!prev || prev.id !== id) return prev;
-          const updated = { ...prev };
-          if ('title' in patch)       updated.title       = patch.title;
-          if ('priority' in patch)    updated.priority    = patch.priority;
-          if ('due_date' in patch)    updated.dueDate     = patch.due_date || '';
-          if ('description' in patch) updated.description = patch.description || '';
-          if ('subtasks' in patch)    updated.subtasks    = patch.subtasks || [];
-          return updated;
-        });
+        setTasks(prev => prev.map(t => t.id === id ? applyPatch(t) : t));
+        setDetailTask(prev => (!prev || prev.id !== id) ? prev : applyPatch(prev));
 
         if (isDemo) return;
         const { error } = await sb.from('tasks').update(patch).eq('id', id);
-        if (error) showError('Failed to save: ' + error.message);
+        if (error) {
+          const missingScoreColumns = /column|schema/i.test(error.message) && ('impact' in patch || 'effort' in patch);
+          showError('Failed to save: ' + error.message + (missingScoreColumns ? ' — run the scoring migration from the README.' : ''));
+        }
       }
 
       async function handleLogout() {
@@ -993,7 +1616,11 @@
         return tasks.filter(t => t.status === status && isOverdue(t.dueDate));
       }
 
-      const activeCount = tasks.filter(t => t.status !== 'done').length;
+      const activeTasks = tasks.filter(t => t.status !== 'done');
+      const activeCount = activeTasks.length;
+      const unscoredCount = activeTasks.filter(t => !isScored(t)).length;
+      const quickWinCount = activeTasks.filter(t => quadrantOf(t) === 'quickwin').length;
+      const wipCount = tasks.filter(t => t.status === 'inprogress').length;
       const visibleStatuses = overdueFilter ? ['todo', 'inprogress'] : STATUSES;
 
       return (
@@ -1041,8 +1668,8 @@
                   )}
                 </button>
 
-                <button onClick={handleAIPrioritize} disabled={aiLoading || loading || activeCount === 0}
-                  title={activeCount === 0 ? 'No active tasks to analyze' : 'Analyze tasks with AI'}
+                <button onClick={() => runAnalysis('rank')} disabled={aiLoading || loading || activeCount === 0}
+                  title={activeCount === 0 ? 'No active tasks to analyze' : 'Get a ranked execution order with reasoning'}
                   className="flex items-center gap-2 font-mono text-xs border border-amber-300 bg-amber-50 text-amber-800 px-3 py-1.5 rounded-lg hover:bg-amber-100 hover:border-amber-400 transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
                   {aiLoading ? (
                     <><span className="spinner" style={{borderColor:'rgba(180,83,9,0.3)', borderTopColor:'#b45309'}}></span>Analyzing…</>
@@ -1051,9 +1678,22 @@
                       <svg width="12" height="12" viewBox="0 0 14 14" fill="none" className="text-amber-500">
                         <path d="M7 1L8.5 5.5L13 7L8.5 8.5L7 13L5.5 8.5L1 7L5.5 5.5L7 1Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" fill="currentColor" fillOpacity="0.2"/>
                       </svg>
-                      AI Prioritize
+                      AI Rank
                     </>
                   )}
+                </button>
+
+                <button onClick={() => setSprintSetupOpen(o => !o)} disabled={aiLoading || loading || activeCount === 0}
+                  title={activeCount === 0 ? 'No active tasks to plan with' : 'Plan a sprint within an effort budget'}
+                  className={`flex items-center gap-2 font-mono text-xs border px-3 py-1.5 rounded-lg transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed
+                    ${sprintSetupOpen
+                      ? 'bg-indigo-600 text-white border-indigo-700'
+                      : 'border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100 hover:border-indigo-400'}`}>
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <rect x="1" y="2" width="10" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.2" fill="none"/>
+                    <path d="M3.5 6.5l1.7 1.7L8.7 5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Plan Sprint
                 </button>
 
                 {/* Email shown for real users only */}
@@ -1076,6 +1716,106 @@
               </div>
             </div>
 
+            {/* Backlog health */}
+            {!loading && tasks.length > 0 && (
+              <div className="mb-5 flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-[10px] text-stone-400 uppercase tracking-widest mr-1">Backlog health</span>
+                <span className="font-mono text-[11px] px-2.5 py-1 rounded-full border bg-white border-stone-200 text-stone-500 shadow-sm">
+                  {activeCount} active
+                </span>
+                <button
+                  onClick={() => { if (overdueCount > 0) { setView('board'); setOverdueFilter(true); } }}
+                  disabled={overdueCount === 0}
+                  title={overdueCount > 0 ? 'Show overdue tasks on the board' : 'Nothing overdue'}
+                  className={`font-mono text-[11px] px-2.5 py-1 rounded-full border shadow-sm transition-colors ${
+                    overdueCount > 0
+                      ? 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100 cursor-pointer'
+                      : 'bg-white border-stone-200 text-stone-400 cursor-default'
+                  }`}>
+                  {overdueCount} overdue
+                </button>
+                <button
+                  onClick={() => { if (unscoredCount > 0) setView('matrix'); }}
+                  disabled={unscoredCount === 0}
+                  title={unscoredCount > 0 ? 'Score these on the Priority Matrix' : 'Everything is scored'}
+                  className={`font-mono text-[11px] px-2.5 py-1 rounded-full border shadow-sm transition-colors ${
+                    unscoredCount > 0
+                      ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 cursor-pointer'
+                      : 'bg-white border-stone-200 text-stone-400 cursor-default'
+                  }`}>
+                  {unscoredCount} unscored
+                </button>
+                <button
+                  onClick={() => { if (quickWinCount > 0) setView('matrix'); }}
+                  disabled={quickWinCount === 0}
+                  title="High impact, low effort — see them on the matrix"
+                  className={`font-mono text-[11px] px-2.5 py-1 rounded-full border shadow-sm transition-colors ${
+                    quickWinCount > 0
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 cursor-pointer'
+                      : 'bg-white border-stone-200 text-stone-400 cursor-default'
+                  }`}>
+                  {quickWinCount} quick win{quickWinCount === 1 ? '' : 's'}
+                </button>
+                {wipCount > 3 && (
+                  <span className="font-mono text-[11px] px-2.5 py-1 rounded-full border bg-red-50 border-red-200 text-red-700 shadow-sm"
+                    title="More than 3 tasks in progress — consider finishing before starting">
+                    WIP high · {wipCount} in progress
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* View switch */}
+            <div className="mb-6">
+              <div className="inline-flex bg-white border border-stone-200 rounded-xl p-1 shadow-sm">
+                {[['board', 'Board'], ['matrix', 'Priority Matrix']].map(([key, label]) => (
+                  <button key={key} onClick={() => setView(key)}
+                    className={`font-mono text-xs px-4 py-1.5 rounded-lg transition-colors ${view === key ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Sprint capacity setup */}
+            {sprintSetupOpen && (
+              <div className="card-enter mb-6 bg-white border border-indigo-200 rounded-2xl shadow-sm px-5 py-4 flex items-end gap-4 flex-wrap">
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-mono text-[11px] text-stone-400 uppercase tracking-widest">Sprint capacity</label>
+                  <div className="flex items-center gap-2">
+                    <input type="number" min="3" max="60" value={sprintCapacity}
+                      onChange={e => setSprintCapacity(Math.max(1, Number(e.target.value) || 0))}
+                      className="font-mono text-sm bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-stone-700 w-24" />
+                    <span className="font-mono text-xs text-stone-400">effort points</span>
+                  </div>
+                </div>
+                <p className="font-mono text-[11px] text-stone-400 leading-relaxed flex-1 min-w-48 pb-1">
+                  The AI commits tasks to the sprint within this budget and explicitly defers the rest — with reasoning for both.
+                </p>
+                <div className="flex gap-2 pb-0.5">
+                  <button onClick={() => setSprintSetupOpen(false)}
+                    className="font-mono text-xs text-stone-400 hover:text-stone-600 px-3 py-2 transition-colors">Cancel</button>
+                  <button onClick={() => runAnalysis('sprint', sprintCapacity)} disabled={aiLoading}
+                    className="font-mono text-xs bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50">
+                    Generate plan
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* AI Plan / Rank panel */}
+            {aiRecord && !aiLoading && (
+              <AIPlanPanel
+                record={aiRecord}
+                isStale={!loading && planSignature(tasks) !== aiRecord.snapshot}
+                onDismiss={dismissAnalysis}
+                onRerun={rerunAnalysis}
+                onOpenTask={openTaskById}
+              />
+            )}
+
+            {view === 'board' && (<>
+
             {/* Overdue filter active indicator */}
             {overdueFilter && (
               <div className="confirm-banner mb-6 flex items-center justify-between gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
@@ -1094,11 +1834,6 @@
                   Clear filter
                 </button>
               </div>
-            )}
-
-            {/* AI Panel */}
-            {aiResponse !== null && (
-              <AIPriorityPanel response={aiResponse} onClose={() => setAiResponse(null)} />
             )}
 
             {/* Add Task Form */}
@@ -1152,6 +1887,12 @@
               </div>
             )}
 
+            </>)}
+
+            {view === 'matrix' && !loading && (
+              <MatrixView tasks={tasks} onOpenTask={t => setDetailTask(t)} />
+            )}
+
             {/* Detail Modal */}
             {detailTask && (
               <TaskDetailModal
@@ -1170,17 +1911,20 @@
     /* ── App (auth gate) ──────────────────────────────── */
     function App() {
       const [user, setUser] = React.useState(null);
-      const [isDemo, setIsDemo] = React.useState(false);
+      // ?demo=1 deep-links straight into demo mode — used by the portfolio so
+      // a visitor lands inside the product instead of on the auth screen.
+      const [isDemo, setIsDemo] = React.useState(() => new URLSearchParams(window.location.search).get('demo') === '1');
 
       React.useEffect(() => {
         sb.auth.getSession().then(({ data: { session } }) => {
           setUser(session?.user ?? false);
         });
 
-        const { data: { subscription } } = sb.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = sb.auth.onAuthStateChange((event, session) => {
           setUser(session?.user ?? false);
-          // If user signs out, exit demo mode too
-          if (!session) setIsDemo(false);
+          // Exit demo only on an actual sign-out — the initial auth event also
+          // has a null session and must not cancel a ?demo=1 deep link.
+          if (event === 'SIGNED_OUT') setIsDemo(false);
         });
 
         return () => subscription.unsubscribe();
@@ -1192,6 +1936,7 @@
 
       function handleExitDemo() {
         setIsDemo(false);
+        if (window.location.search) window.history.replaceState(null, '', window.location.pathname);
       }
 
       // Loading state

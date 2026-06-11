@@ -162,13 +162,39 @@
     );
 
     /* ── Demo data ────────────────────────────────────── */
+    /* Dates are relative to "today" so the demo board never goes stale.
+       Impact/effort spread is deliberate: every matrix quadrant is populated,
+       two tasks share a cell (jitter demo), and two are unscored so the
+       AI score-suggest flow has something to do. */
+    const demoDay = offset => {
+      const d = new Date();
+      d.setDate(d.getDate() + offset);
+      return d.toISOString().slice(0, 10);
+    };
+
     const DEMO_TASKS = [
-      { id: 'd1', title: 'Define Q3 product roadmap', status: 'todo', priority: 'high', dueDate: '2026-06-15', description: 'Align with stakeholders on key themes and initiatives for Q3. Include engineering capacity estimates.', subtasks: [{ id: 's1', text: 'Draft initial themes', done: true }, { id: 's2', text: 'Review with engineering lead', done: false }, { id: 's3', text: 'Present to leadership', done: false }] },
-      { id: 'd2', title: 'User interview synthesis', status: 'todo', priority: 'high', dueDate: '2026-06-10', description: 'Synthesize findings from 8 user interviews conducted last week. Identify top 3 pain points.', subtasks: [{ id: 's4', text: 'Transcribe notes', done: true }, { id: 's5', text: 'Tag themes', done: true }, { id: 's6', text: 'Write synthesis doc', done: false }] },
-      { id: 'd3', title: 'Update onboarding flow', status: 'inprogress', priority: 'medium', dueDate: '2026-06-20', description: 'Redesign the onboarding checklist based on drop-off data. Focus on reducing steps 3 and 4.', subtasks: [] },
-      { id: 'd4', title: 'Competitive analysis — pricing', status: 'inprogress', priority: 'low', dueDate: '2026-06-25', description: 'Survey pricing pages of 5 competitors. Document positioning and packaging differences.', subtasks: [{ id: 's7', text: 'List competitors', done: true }, { id: 's8', text: 'Document pricing tiers', done: false }] },
-      { id: 'd5', title: 'Write release notes for v2.4', status: 'done', priority: 'medium', dueDate: '2026-06-01', description: 'Customer-facing release notes covering new dashboard, export feature, and bug fixes.', subtasks: [] },
-      { id: 'd6', title: 'Sprint retrospective action items', status: 'done', priority: 'low', dueDate: '2026-06-03', description: 'Document and assign follow-up actions from the sprint retro. Share with team by EOD.', subtasks: [{ id: 's9', text: 'Collect retro notes', done: true }, { id: 's10', text: 'Assign owners', done: true }] },
+      // Quick wins
+      { id: 't1', title: 'Fix broken signup analytics event', status: 'todo', priority: 'high', dueDate: demoDay(2), impact: 5, effort: 1, description: 'Signup conversion events stopped firing after the last release — the funnel dashboard is blind until this ships.', subtasks: [{ id: 's1', text: 'Reproduce on staging', done: true }, { id: 's2', text: 'Patch event payload', done: false }] },
+      { id: 't2', title: 'Add CSV export to reports', status: 'todo', priority: 'medium', dueDate: demoDay(9), impact: 4, effort: 2, description: 'Top request from three enterprise accounts. Unblocks their month-end reporting without support tickets.', subtasks: [] },
+      { id: 't3', title: 'Draft Q3 OKRs', status: 'inprogress', priority: 'high', dueDate: demoDay(4), impact: 4, effort: 2, description: 'First draft of Q3 objectives for leadership review. Anchor on activation and retention metrics.', subtasks: [{ id: 's3', text: 'Collect team inputs', done: true }, { id: 's4', text: 'Write draft objectives', done: true }, { id: 's5', text: 'Review with design + eng leads', done: false }] },
+      // Big bets
+      { id: 't4', title: 'Redesign onboarding flow', status: 'todo', priority: 'high', dueDate: demoDay(21), impact: 5, effort: 4, description: 'Drop-off at steps 3-4 is the biggest activation leak. Redesign around a 3-field setup and a sample workspace.', subtasks: [{ id: 's6', text: 'Synthesize drop-off data', done: true }, { id: 's7', text: 'Wireframe new flow', done: false }, { id: 's8', text: 'Usability test with 5 users', done: false }] },
+      { id: 't5', title: 'Self-serve plan upgrades', status: 'todo', priority: 'medium', dueDate: demoDay(30), impact: 5, effort: 5, description: 'Move upgrades out of the sales-assisted flow. Big revenue lever, big surface area: billing, entitlements, comms.', subtasks: [] },
+      { id: 't6', title: 'Usage-based pricing experiment', status: 'todo', priority: 'medium', dueDate: demoDay(35), impact: 4, effort: 4, description: 'Test a metered tier with 20 design partners. Needs metering, a pricing page variant, and a rollback plan.', subtasks: [] },
+      // Fill-ins
+      { id: 't7', title: 'Refresh empty-state illustrations', status: 'todo', priority: 'low', dueDate: demoDay(14), impact: 2, effort: 1, description: 'Current empty states are placeholder gray boxes. Small polish, low urgency.', subtasks: [] },
+      { id: 't8', title: 'Update API docs for v2 endpoints', status: 'inprogress', priority: 'medium', dueDate: demoDay(6), impact: 3, effort: 2, description: 'Two integration partners hit breaking differences this sprint — the reference still documents v1.', subtasks: [{ id: 's9', text: 'Audit changed endpoints', done: true }, { id: 's10', text: 'Rewrite auth section', done: false }] },
+      { id: 't9', title: 'Archive stale feature flags', status: 'todo', priority: 'low', dueDate: demoDay(18), impact: 2, effort: 2, description: '14 flags are fully rolled out but still in code. Cleanup reduces config risk.', subtasks: [] },
+      { id: 't10', title: 'Sprint 24 retro action items', status: 'inprogress', priority: 'medium', dueDate: demoDay(-2), impact: 3, effort: 1, description: 'Document and assign the three follow-ups from retro. Already overdue.', subtasks: [{ id: 's11', text: 'Collect retro notes', done: true }, { id: 's12', text: 'Assign owners', done: false }] },
+      // Time sinks
+      { id: 't11', title: 'Rebuild admin panel in new framework', status: 'todo', priority: 'low', dueDate: demoDay(40), impact: 2, effort: 5, description: 'Engineering-driven rewrite request. No user-facing change; parked pending a stronger case.', subtasks: [] },
+      { id: 't12', title: 'Custom theming engine', status: 'todo', priority: 'low', dueDate: demoDay(45), impact: 2, effort: 4, description: 'One large account asked for white-labeling. High build cost for a single-account need.', subtasks: [] },
+      // Unscored — feed for the AI score-suggest flow
+      { id: 't13', title: 'Churned-account interview synthesis', status: 'todo', priority: 'high', dueDate: demoDay(-1), impact: null, effort: null, description: 'Synthesize 6 churn interviews into the top 3 cancellation drivers. Input for the Q3 retention bet.', subtasks: [{ id: 's13', text: 'Transcribe interviews', done: true }, { id: 's14', text: 'Tag themes', done: true }, { id: 's15', text: 'Write synthesis doc', done: false }] },
+      { id: 't14', title: 'Competitive pricing teardown', status: 'inprogress', priority: 'medium', dueDate: demoDay(7), impact: null, effort: null, description: 'Document packaging and pricing for the top 5 competitors ahead of the pricing experiment.', subtasks: [] },
+      // Done
+      { id: 't15', title: 'Ship v2.4 release notes', status: 'done', priority: 'medium', dueDate: demoDay(-5), impact: 2, effort: 1, description: 'Customer-facing notes covering the new dashboard and export fixes.', subtasks: [] },
+      { id: 't16', title: 'Q2 metrics review for the board', status: 'done', priority: 'high', dueDate: demoDay(-8), impact: 4, effort: 2, description: 'Quarterly product metrics pack: activation, retention, NRR.', subtasks: [{ id: 's16', text: 'Pull metrics', done: true }, { id: 's17', text: 'Build deck', done: true }] },
     ];
 
     /* ── DB row → app task ───────────────────────────── */
@@ -181,6 +207,8 @@
         dueDate:     row.due_date || '',
         description: row.description || '',
         subtasks:    Array.isArray(row.subtasks) ? row.subtasks : [],
+        impact:      Number.isInteger(row.impact) ? row.impact : null,
+        effort:      Number.isInteger(row.effort) ? row.effort : null,
       };
     }
 
@@ -196,6 +224,32 @@
       low:    { label: 'Low',    badgeClass: 'bg-stone-100 text-stone-500' },
       medium: { label: 'Medium', badgeClass: 'bg-blue-100 text-blue-700' },
       high:   { label: 'High',   badgeClass: 'bg-red-100 text-red-600' },
+    };
+
+    /* ── Impact / Effort scoring ──────────────────────── */
+    const SCORE_SCALE = [1, 2, 3, 4, 5];
+
+    function isScored(t) {
+      return Number.isInteger(t.impact) && Number.isInteger(t.effort);
+    }
+
+    /* Quadrant boundary sits at the scale midpoint (3):
+       impact > 3 counts as high impact, effort <= 3 as low effort. */
+    function quadrantOf(t) {
+      if (!isScored(t)) return null;
+      const highImpact = t.impact > 3;
+      const lowEffort  = t.effort <= 3;
+      if (highImpact && lowEffort)  return 'quickwin';
+      if (highImpact && !lowEffort) return 'bigbet';
+      if (!highImpact && lowEffort) return 'fillin';
+      return 'timesink';
+    }
+
+    const QUADRANT_META = {
+      quickwin: { label: 'Quick Win', chipClass: 'bg-emerald-100 text-emerald-700', dot: '#10b981', tint: 'rgba(16,185,129,0.05)',  labelColor: '#047857' },
+      bigbet:   { label: 'Big Bet',   chipClass: 'bg-indigo-100 text-indigo-700',   dot: '#6366f1', tint: 'rgba(99,102,241,0.05)',  labelColor: '#4338ca' },
+      fillin:   { label: 'Fill-in',   chipClass: 'bg-stone-200 text-stone-600',     dot: '#a8a29e', tint: 'rgba(168,162,158,0.08)', labelColor: '#78716c' },
+      timesink: { label: 'Time Sink', chipClass: 'bg-red-100 text-red-600',         dot: '#ef4444', tint: 'rgba(239,68,68,0.04)',   labelColor: '#b91c1c' },
     };
 
     function formatDate(iso) {

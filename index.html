@@ -149,6 +149,68 @@
     .demo-banner {
       background: linear-gradient(90deg, #1c1917 0%, #292524 100%);
     }
+
+    /* Priority Matrix */
+    .matrix-dot {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      width: 14px; height: 14px;
+      background: none; border: none; padding: 0;
+      cursor: pointer;
+      z-index: 1;
+    }
+    .matrix-dot:hover, .matrix-dot:focus-visible { z-index: 20; }
+    .matrix-dot .dot {
+      display: block;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      box-sizing: border-box;
+      transition: transform 0.12s ease;
+      position: relative;
+    }
+    .matrix-dot:hover .dot { transform: scale(1.4); }
+    .matrix-dot .dot-overdue {
+      position: absolute;
+      top: -4px; right: -4px;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+      border: 1.5px solid #fff;
+    }
+    .matrix-dot .dot-label {
+      position: absolute;
+      top: 50%; transform: translateY(-50%);
+      left: calc(100% + 7px);
+      font-family: 'DM Mono', monospace;
+      font-size: 10.5px;
+      color: #57534e;
+      background: rgba(255,255,255,0.9);
+      border: 1px solid rgba(28,25,23,0.06);
+      border-radius: 6px;
+      padding: 1px 6px;
+      white-space: nowrap;
+      transition: color 0.12s, box-shadow 0.12s;
+    }
+    .matrix-dot .dot-label.left {
+      left: auto;
+      right: calc(100% + 7px);
+    }
+    .matrix-dot:hover .dot-label {
+      color: #1c1917;
+      background: #fff;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    }
+    .matrix-corner {
+      position: absolute;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.5;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -1016,6 +1078,144 @@ Return ONLY valid JSON, no markdown:
       );
     }
 
+    /* ── Priority Matrix ──────────────────────────────── */
+    function MatrixView({ tasks, onOpenTask }) {
+      const active   = tasks.filter(t => t.status !== 'done');
+      const scored   = active.filter(isScored);
+      const unscored = active.filter(t => !isScored(t));
+
+      // Tasks sharing an impact/effort cell fan out around the cell centre
+      const cells = {};
+      scored.forEach(t => {
+        const key = `${t.impact}-${t.effort}`;
+        (cells[key] = cells[key] || []).push(t);
+      });
+
+      const PAD = 8; // % inset so extreme scores don't touch the plot edge
+      function posOf(t) {
+        const group = cells[`${t.impact}-${t.effort}`];
+        const idx = group.indexOf(t);
+        const x = PAD + ((t.effort - 1) / 4) * (100 - PAD * 2);
+        const y = PAD + ((5 - t.impact) / 4) * (100 - PAD * 2);
+        if (group.length === 1) return { x, y };
+        const angle = (2 * Math.PI * idx) / group.length - Math.PI / 2;
+        return { x: x + Math.cos(angle) * 3, y: y + Math.sin(angle) * 4.5 };
+      }
+
+      const counts = { quickwin: 0, bigbet: 0, fillin: 0, timesink: 0 };
+      scored.forEach(t => { counts[quadrantOf(t)] += 1; });
+
+      const truncate = (s, n) => s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s;
+
+      return (
+        <div className="card-enter bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+          {/* Header + legend */}
+          <div className="flex items-center justify-between gap-3 flex-wrap px-6 py-4 border-b border-stone-100">
+            <div>
+              <h2 className="font-display font-700 text-stone-800 text-base tracking-tight">Priority Matrix</h2>
+              <p className="font-mono text-[11px] text-stone-400 mt-0.5">
+                impact vs effort · {scored.length} of {active.length} active tasks scored
+              </p>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {Object.keys(QUADRANT_META).map(q => (
+                <span key={q} className={`font-mono text-[10px] font-medium px-2 py-0.5 rounded-full ${QUADRANT_META[q].chipClass}`}>
+                  {QUADRANT_META[q].label} · {counts[q]}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Plot */}
+          <div className="px-5 pt-5 pb-3">
+            <div className="flex gap-2">
+              <div className="flex items-center shrink-0">
+                <span className="font-mono text-[10px] text-stone-400" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+                  Impact ↑
+                </span>
+              </div>
+              <div className="relative flex-1" style={{ aspectRatio: '16 / 10' }}>
+                {/* Quadrant tints */}
+                <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 rounded-xl overflow-hidden border border-stone-200">
+                  <div style={{ background: QUADRANT_META.quickwin.tint }} />
+                  <div style={{ background: QUADRANT_META.bigbet.tint }} />
+                  <div style={{ background: QUADRANT_META.fillin.tint }} />
+                  <div style={{ background: QUADRANT_META.timesink.tint }} />
+                </div>
+                {/* Midlines */}
+                <div className="absolute left-1/2 top-1 bottom-1 border-l border-dashed border-stone-300" />
+                <div className="absolute top-1/2 left-1 right-1 border-t border-dashed border-stone-300" />
+                {/* Corner labels */}
+                <span className="matrix-corner" style={{ top: 10, left: 14, color: QUADRANT_META.quickwin.labelColor }}>Quick wins</span>
+                <span className="matrix-corner" style={{ top: 10, right: 14, color: QUADRANT_META.bigbet.labelColor }}>Big bets</span>
+                <span className="matrix-corner" style={{ bottom: 10, left: 14, color: QUADRANT_META.fillin.labelColor }}>Fill-ins</span>
+                <span className="matrix-corner" style={{ bottom: 10, right: 14, color: QUADRANT_META.timesink.labelColor }}>Time sinks</span>
+
+                {scored.length === 0 && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <p className="font-mono text-xs text-stone-400 text-center px-8">
+                      No scored tasks yet — open a task and set impact and effort (or let AI suggest them).
+                    </p>
+                  </div>
+                )}
+
+                {/* Task dots */}
+                {scored.map(t => {
+                  const { x, y } = posOf(t);
+                  const q = quadrantOf(t);
+                  const m = QUADRANT_META[q];
+                  const overdue = isOverdue(t.dueDate);
+                  const inProgress = t.status === 'inprogress';
+                  return (
+                    <button
+                      key={t.id}
+                      className="matrix-dot"
+                      style={{ left: x + '%', top: y + '%' }}
+                      onClick={() => onOpenTask(t)}
+                      title={`${t.title} — impact ${t.impact}/5 · effort ${t.effort}/5 · ${COLUMN_META[t.status].label}${overdue ? ' · OVERDUE' : ''}`}
+                    >
+                      <span className="dot" style={{
+                        background: m.dot,
+                        boxShadow: inProgress ? `0 0 0 3.5px ${m.dot}40` : '0 1px 4px rgba(0,0,0,0.15)',
+                      }}>
+                        {overdue && <span className="dot-overdue" />}
+                      </span>
+                      <span className={`dot-label${t.effort >= 4 ? ' left' : ''}`}>{truncate(t.title, 26)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="flex items-center justify-between mt-2 pl-6 pr-1">
+              <span className="font-mono text-[10px] text-stone-400">← low effort</span>
+              <span className="font-mono text-[10px] text-stone-400">ring = in progress · red dot = overdue</span>
+              <span className="font-mono text-[10px] text-stone-400">high effort →</span>
+            </div>
+          </div>
+
+          {/* Unscored tasks */}
+          {unscored.length > 0 && (
+            <div className="border-t border-stone-100 bg-stone-50 px-6 py-4">
+              <p className="font-mono text-[11px] text-stone-400 uppercase tracking-widest mb-2.5">
+                Needs scoring · {unscored.length}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {unscored.map(t => (
+                  <button key={t.id} onClick={() => onOpenTask(t)}
+                    className="font-mono text-xs bg-white border border-amber-200 text-stone-600 px-3 py-1.5 rounded-lg hover:border-amber-400 hover:bg-amber-50 transition-colors">
+                    {t.title} <span className="text-amber-600 ml-1">score →</span>
+                  </button>
+                ))}
+              </div>
+              <p className="font-mono text-[10px] text-stone-400 mt-2.5">
+                Tip: open a task and hit <span className="text-amber-700">AI suggest</span> to score it in one click.
+              </p>
+            </div>
+          )}
+        </div>
+      );
+    }
+
     /* ── TaskBoard ────────────────────────────────────── */
     function TaskBoard({ user, isDemo = false, onExitDemo }) {
       const [tasks, setTasks] = React.useState(isDemo ? DEMO_TASKS : []);
@@ -1026,6 +1226,7 @@ Return ONLY valid JSON, no markdown:
       const [aiResponse, setAiResponse] = React.useState(null);
       const [detailTask, setDetailTask] = React.useState(null);
       const [overdueFilter, setOverdueFilter] = React.useState(false);
+      const [view, setView] = React.useState('board');
       const [draggingId, setDraggingId] = React.useState(null);
       const draggingIdRef = React.useRef(null);
       const errorTimerRef = React.useRef(null);
@@ -1281,6 +1482,20 @@ Return ONLY valid JSON, no markdown:
               </div>
             </div>
 
+            {/* View switch */}
+            <div className="mb-6">
+              <div className="inline-flex bg-white border border-stone-200 rounded-xl p-1 shadow-sm">
+                {[['board', 'Board'], ['matrix', 'Priority Matrix']].map(([key, label]) => (
+                  <button key={key} onClick={() => setView(key)}
+                    className={`font-mono text-xs px-4 py-1.5 rounded-lg transition-colors ${view === key ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {view === 'board' && (<>
+
             {/* Overdue filter active indicator */}
             {overdueFilter && (
               <div className="confirm-banner mb-6 flex items-center justify-between gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
@@ -1355,6 +1570,12 @@ Return ONLY valid JSON, no markdown:
                   />
                 ))}
               </div>
+            )}
+
+            </>)}
+
+            {view === 'matrix' && !loading && (
+              <MatrixView tasks={tasks} onOpenTask={t => setDetailTask(t)} />
             )}
 
             {/* Detail Modal */}

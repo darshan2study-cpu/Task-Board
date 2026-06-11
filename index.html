@@ -270,7 +270,55 @@
       return Math.random().toString(36).slice(2, 10);
     }
 
-    /* ── Groq API call ────────────────────────────────── */
+    /* ── Groq API calls ───────────────────────────────── */
+    const GROQ_PROXY_URL = 'https://uqbvpytbqvlubuekgcbz.supabase.co/functions/v1/groq-proxy';
+    const GROQ_MODEL = 'llama-3.3-70b-versatile';
+
+    async function groqChat(prompt, maxTokens) {
+      const res = await fetch(GROQ_PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: GROQ_MODEL,
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: maxTokens,
+        }),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody?.error?.message || `Groq API error: ${res.status}`);
+      }
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content || '';
+    }
+
+    async function groqJSON(prompt, maxTokens) {
+      const text = await groqChat(prompt, maxTokens);
+      return JSON.parse(text.replace(/```json|```/g, '').trim());
+    }
+
+    /* AI scoring assist: the model proposes impact/effort, the human
+       confirms or overrides — same contract as the rest of the AI here. */
+    async function fetchScoreSuggestion(task) {
+      const prompt = `You are a product planning assistant. Score this task on an impact/effort scale.
+
+Task: "${task.title}"
+${task.description ? 'Details: ' + task.description : ''}
+
+impact: 1 (negligible user or business value) to 5 (major value)
+effort: 1 (a few hours) to 5 (multiple weeks)
+
+Return ONLY valid JSON, no markdown:
+{ "impact": n, "effort": n, "rationale": "one short sentence explaining both scores" }`;
+      const parsed = await groqJSON(prompt, 200);
+      const clamp = v => SCORE_SCALE.includes(v) ? v : null;
+      return {
+        impact: clamp(parsed.impact),
+        effort: clamp(parsed.effort),
+        rationale: typeof parsed.rationale === 'string' ? parsed.rationale : '',
+      };
+    }
+
     async function fetchGroqPrioritization(tasks) {
       const activeTasks = tasks.filter(t => t.status !== 'done');
       if (activeTasks.length === 0) return "No active tasks to prioritize.";
@@ -440,6 +488,11 @@
       const [newSubtask, setNewSubtask] = React.useState('');
       const [saving, setSaving] = React.useState(false);
       const [confirmDone, setConfirmDone] = React.useState(false);
+      const [impact, setImpact] = React.useState(task.impact);
+      const [effort, setEffort] = React.useState(task.effort);
+      const [scoreSuggesting, setScoreSuggesting] = React.useState(false);
+      const [scoreRationale, setScoreRationale] = React.useState('');
+      const [scoreError, setScoreError] = React.useState('');
       const [validationError, setValidationError] = React.useState('');
       const [invalidFields, setInvalidFields] = React.useState([]);
 
@@ -511,6 +564,35 @@
       async function handleDescriptionBlur() {
         if (description !== task.description) await save({ description: description || null });
         if (description.trim()) setInvalidFields(prev => prev.filter(f => f !== 'description'));
+      }
+
+      async function handleImpactChange(e) {
+        const val = e.target.value ? Number(e.target.value) : null;
+        setImpact(val);
+        await save({ impact: val });
+      }
+
+      async function handleEffortChange(e) {
+        const val = e.target.value ? Number(e.target.value) : null;
+        setEffort(val);
+        await save({ effort: val });
+      }
+
+      async function handleSuggestScores() {
+        if (scoreSuggesting) return;
+        setScoreSuggesting(true); setScoreError(''); setScoreRationale('');
+        try {
+          const s = await fetchScoreSuggestion({ title, description });
+          if (s.impact) setImpact(s.impact);
+          if (s.effort) setEffort(s.effort);
+          if (s.impact || s.effort) {
+            await save({ impact: s.impact != null ? s.impact : impact, effort: s.effort != null ? s.effort : effort });
+          }
+          setScoreRationale(s.rationale || 'Scores suggested — adjust if you disagree.');
+        } catch (err) {
+          setScoreError('Could not suggest scores: ' + err.message);
+        }
+        setScoreSuggesting(false);
       }
 
       async function toggleSubtask(id) {
@@ -618,6 +700,69 @@
                   <input type="date" value={dueDate} onChange={handleDueDateChange}
                     className={fieldClass("font-mono text-sm bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-stone-700 focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer", 'dueDate')} />
                 </div>
+              </div>
+
+              {/* Impact / Effort scoring */}
+              <div className="flex flex-col gap-2.5 bg-stone-50 border border-stone-200 rounded-xl px-4 py-3.5">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <label className="font-mono text-[11px] text-stone-400 uppercase tracking-widest">Impact / Effort</label>
+                  {(() => {
+                    const q = quadrantOf({ impact, effort });
+                    return q ? (
+                      <span className={`font-mono text-[10px] font-medium px-2 py-0.5 rounded-full ${QUADRANT_META[q].chipClass}`}>
+                        {QUADRANT_META[q].label}
+                      </span>
+                    ) : (
+                      <span className="font-mono text-[10px] text-stone-300">unscored</span>
+                    );
+                  })()}
+                </div>
+                <div className="flex gap-3 flex-wrap items-end">
+                  <div className="flex flex-col gap-1 flex-1 min-w-28">
+                    <label className="font-mono text-[10px] text-stone-400">Impact</label>
+                    <select value={impact != null ? impact : ''} onChange={handleImpactChange}
+                      className="font-mono text-sm bg-white border border-stone-200 rounded-xl px-3 py-2 text-stone-700 focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer">
+                      <option value="">Not set</option>
+                      <option value="1">1 · minimal</option>
+                      <option value="2">2</option>
+                      <option value="3">3 · meaningful</option>
+                      <option value="4">4</option>
+                      <option value="5">5 · major</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1 flex-1 min-w-28">
+                    <label className="font-mono text-[10px] text-stone-400">Effort</label>
+                    <select value={effort != null ? effort : ''} onChange={handleEffortChange}
+                      className="font-mono text-sm bg-white border border-stone-200 rounded-xl px-3 py-2 text-stone-700 focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer">
+                      <option value="">Not set</option>
+                      <option value="1">1 · hours</option>
+                      <option value="2">2</option>
+                      <option value="3">3 · days</option>
+                      <option value="4">4</option>
+                      <option value="5">5 · weeks</option>
+                    </select>
+                  </div>
+                  <button type="button" onClick={handleSuggestScores} disabled={scoreSuggesting || !title.trim()}
+                    title="Let AI suggest impact and effort from the title and description"
+                    className="flex items-center gap-1.5 font-mono text-xs border border-amber-300 bg-amber-50 text-amber-800 px-3 py-2 rounded-xl hover:bg-amber-100 hover:border-amber-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
+                    {scoreSuggesting ? (
+                      <><span className="spinner" style={{borderColor:'rgba(180,83,9,0.3)', borderTopColor:'#b45309'}}></span>Scoring…</>
+                    ) : (
+                      <>
+                        <svg width="11" height="11" viewBox="0 0 14 14" fill="none" className="text-amber-500">
+                          <path d="M7 1L8.5 5.5L13 7L8.5 8.5L7 13L5.5 8.5L1 7L5.5 5.5L7 1Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" fill="currentColor" fillOpacity="0.2"/>
+                        </svg>
+                        AI suggest
+                      </>
+                    )}
+                  </button>
+                </div>
+                {scoreRationale && (
+                  <p className="confirm-banner font-mono text-[11px] text-amber-700 leading-relaxed">✦ {scoreRationale} <span className="text-stone-400">— adjust if you disagree.</span></p>
+                )}
+                {scoreError && (
+                  <p className="confirm-banner font-mono text-[11px] text-red-600">{scoreError}</p>
+                )}
               </div>
 
               <div className="flex flex-col gap-1.5">
@@ -783,7 +928,17 @@
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 mt-1.5">
+              <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                {isScored(task) && (() => {
+                  const q = quadrantOf(task);
+                  const m = QUADRANT_META[q];
+                  return (
+                    <span className={`font-mono text-[10px] font-medium px-2 py-0.5 rounded-full ${m.chipClass}`}
+                      title={`${m.label} — impact ${task.impact}/5, effort ${task.effort}/5`}>
+                      I{task.impact}·E{task.effort}
+                    </span>
+                  );
+                })()}
                 {formattedDate && (
                   <div className={`flex items-center gap-1 font-mono text-[11px] ${overdue ? 'text-red-500' : 'text-stone-400'}`}>
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
@@ -1008,31 +1163,27 @@
       }
 
       async function patchTask(id, patch) {
-        setTasks(prev => prev.map(t => {
-          if (t.id !== id) return t;
+        function applyPatch(t) {
           const updated = { ...t };
           if ('title' in patch)       updated.title       = patch.title;
           if ('priority' in patch)    updated.priority    = patch.priority;
           if ('due_date' in patch)    updated.dueDate     = patch.due_date || '';
           if ('description' in patch) updated.description = patch.description || '';
           if ('subtasks' in patch)    updated.subtasks    = patch.subtasks || [];
+          if ('impact' in patch)      updated.impact      = patch.impact;
+          if ('effort' in patch)      updated.effort      = patch.effort;
           return updated;
-        }));
+        }
 
-        setDetailTask(prev => {
-          if (!prev || prev.id !== id) return prev;
-          const updated = { ...prev };
-          if ('title' in patch)       updated.title       = patch.title;
-          if ('priority' in patch)    updated.priority    = patch.priority;
-          if ('due_date' in patch)    updated.dueDate     = patch.due_date || '';
-          if ('description' in patch) updated.description = patch.description || '';
-          if ('subtasks' in patch)    updated.subtasks    = patch.subtasks || [];
-          return updated;
-        });
+        setTasks(prev => prev.map(t => t.id === id ? applyPatch(t) : t));
+        setDetailTask(prev => (!prev || prev.id !== id) ? prev : applyPatch(prev));
 
         if (isDemo) return;
         const { error } = await sb.from('tasks').update(patch).eq('id', id);
-        if (error) showError('Failed to save: ' + error.message);
+        if (error) {
+          const missingScoreColumns = /column|schema/i.test(error.message) && ('impact' in patch || 'effort' in patch);
+          showError('Failed to save: ' + error.message + (missingScoreColumns ? ' — run the scoring migration from the README.' : ''));
+        }
       }
 
       async function handleLogout() {
